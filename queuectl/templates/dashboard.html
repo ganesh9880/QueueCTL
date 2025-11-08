@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>queuectl - Job Queue Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            opacity: 0.9;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        }
+
+        .stat-card h3 {
+            font-size: 0.9rem;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-card .value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .stat-card.pending .value { color: #f39c12; }
+        .stat-card.processing .value { color: #3498db; }
+        .stat-card.completed .value { color: #27ae60; }
+        .stat-card.failed .value { color: #e74c3c; }
+        .stat-card.dead .value { color: #95a5a6; }
+        .stat-card.workers .value { color: #9b59b6; }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 2rem;
+        }
+
+        .jobs-section {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .panel {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .panel h2 {
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+            color: #333;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 0.5rem;
+        }
+
+        .filters {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 0.5rem 1rem;
+            border: 2px solid #ddd;
+            background: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+
+        .filter-btn:hover {
+            border-color: #667eea;
+            color: #667eea;
+        }
+
+        .filter-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .job-item {
+            padding: 1rem;
+            border: 1px solid #eee;
+            border-radius: 5px;
+            margin-bottom: 0.5rem;
+            transition: all 0.2s;
+        }
+
+        .job-item:hover {
+            background: #f8f9fa;
+            border-color: #667eea;
+        }
+
+        .job-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .job-id {
+            font-weight: bold;
+            color: #667eea;
+            font-family: monospace;
+        }
+
+        .job-state {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .job-state.pending { background: #fff3cd; color: #856404; }
+        .job-state.processing { background: #cfe2ff; color: #084298; }
+        .job-state.completed { background: #d1e7dd; color: #0f5132; }
+        .job-state.failed { background: #f8d7da; color: #842029; }
+        .job-state.dead { background: #e2e3e5; color: #41464b; }
+
+        .job-details {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .job-command {
+            font-family: monospace;
+            background: #f8f9fa;
+            padding: 0.5rem;
+            border-radius: 3px;
+            margin: 0.5rem 0;
+            word-break: break-all;
+        }
+
+        .job-error {
+            color: #e74c3c;
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            background: #fee;
+            border-radius: 3px;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 0.9rem;
+            font-family: inherit;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .refresh-btn {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            transition: all 0.2s;
+        }
+
+        .refresh-btn:hover {
+            background: #5568d3;
+            transform: scale(1.1);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+
+        .empty {
+            text-align: center;
+            padding: 2rem;
+            color: #999;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .auto-refresh {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #667eea;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚀 queuectl Dashboard</h1>
+        <p>Monitor and manage your job queue in real-time</p>
+    </div>
+
+    <div class="container">
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card workers">
+                <h3>Active Workers</h3>
+                <div class="value" id="workersCount">0</div>
+            </div>
+            <div class="stat-card pending">
+                <h3>Pending</h3>
+                <div class="value" id="pendingCount">0</div>
+            </div>
+            <div class="stat-card processing">
+                <h3>Processing</h3>
+                <div class="value" id="processingCount">0</div>
+            </div>
+            <div class="stat-card completed">
+                <h3>Completed</h3>
+                <div class="value" id="completedCount">0</div>
+            </div>
+            <div class="stat-card failed">
+                <h3>Failed</h3>
+                <div class="value" id="failedCount">0</div>
+            </div>
+            <div class="stat-card dead">
+                <h3>Dead (DLQ)</h3>
+                <div class="value" id="deadCount">0</div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="jobs-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h2>Jobs</h2>
+                    <div class="auto-refresh">
+                        <label>Auto-refresh:</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="autoRefresh" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="filters">
+                    <button class="filter-btn active" onclick="filterJobs(null)">All</button>
+                    <button class="filter-btn" onclick="filterJobs('pending')">Pending</button>
+                    <button class="filter-btn" onclick="filterJobs('processing')">Processing</button>
+                    <button class="filter-btn" onclick="filterJobs('completed')">Completed</button>
+                    <button class="filter-btn" onclick="filterJobs('failed')">Failed</button>
+                    <button class="filter-btn" onclick="filterJobs('dead')">Dead</button>
+                </div>
+
+                <div id="jobsList">
+                    <div class="loading">
+                        <div class="spinner"></div> Loading jobs...
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar">
+                <div class="panel">
+                    <h2>Enqueue Job</h2>
+                    <form id="enqueueForm">
+                        <div class="form-group">
+                            <label>Job ID</label>
+                            <input type="text" id="jobId" placeholder="job-123" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Command</label>
+                            <textarea id="jobCommand" rows="3" placeholder="echo Hello World" required></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Max Retries</label>
+                            <input type="number" id="maxRetries" value="3" min="0">
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">Enqueue Job</button>
+                    </form>
+                </div>
+
+                <div class="panel">
+                    <h2>Configuration</h2>
+                    <div id="configDisplay">
+                        <div class="loading">Loading config...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button class="refresh-btn" onclick="refreshAll()" title="Refresh">↻</button>
+
+    <script>
+        let currentFilter = null;
+        let autoRefreshInterval = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshAll();
+            setupAutoRefresh();
+        });
+
+        function setupAutoRefresh() {
+            const checkbox = document.getElementById('autoRefresh');
+            checkbox.addEventListener('change', function() {
+                if (this.checked) {
+                    startAutoRefresh();
+                } else {
+                    stopAutoRefresh();
+                }
+            });
+            startAutoRefresh();
+        }
+
+        function startAutoRefresh() {
+            if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+            autoRefreshInterval = setInterval(refreshAll, 2000); // Refresh every 2 seconds
+        }
+
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+        }
+
+        async function refreshAll() {
+            await Promise.all([
+                updateStatus(),
+                updateJobs(),
+                updateConfig()
+            ]);
+        }
+
+        async function updateStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                
+                document.getElementById('workersCount').textContent = data.active_workers;
+                document.getElementById('pendingCount').textContent = data.stats.pending;
+                document.getElementById('processingCount').textContent = data.stats.processing;
+                document.getElementById('completedCount').textContent = data.stats.completed;
+                document.getElementById('failedCount').textContent = data.stats.failed;
+                document.getElementById('deadCount').textContent = data.stats.dead;
+            } catch (error) {
+                console.error('Error updating status:', error);
+            }
+        }
+
+        async function updateJobs() {
+            try {
+                const url = currentFilter ? `/api/jobs?state=${currentFilter}` : '/api/jobs';
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                const jobsList = document.getElementById('jobsList');
+                
+                if (data.jobs.length === 0) {
+                    jobsList.innerHTML = '<div class="empty">No jobs found</div>';
+                    return;
+                }
+                
+                jobsList.innerHTML = data.jobs.map(job => `
+                    <div class="job-item">
+                        <div class="job-header">
+                            <span class="job-id">${job.id}</span>
+                            <span class="job-state ${job.state}">${job.state}</span>
+                        </div>
+                        <div class="job-command">${escapeHtml(job.command)}</div>
+                        <div class="job-details">
+                            Attempts: ${job.attempts}/${job.max_retries} | 
+                            Created: ${formatDate(job.created_at)}
+                            ${job.next_retry_at ? ` | Next retry: ${formatDate(job.next_retry_at)}` : ''}
+                        </div>
+                        ${job.error_message ? `<div class="job-error">Error: ${escapeHtml(job.error_message)}</div>` : ''}
+                        ${job.state === 'dead' ? `<button class="btn btn-primary" style="margin-top: 0.5rem; width: 100%;" onclick="retryJob('${job.id}')">Retry from DLQ</button>` : ''}
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error updating jobs:', error);
+                document.getElementById('jobsList').innerHTML = '<div class="empty">Error loading jobs</div>';
+            }
+        }
+
+        async function updateConfig() {
+            try {
+                const response = await fetch('/api/config');
+                const data = await response.json();
+                
+                const configDisplay = document.getElementById('configDisplay');
+                configDisplay.innerHTML = Object.entries(data.config).map(([key, value]) => `
+                    <div style="margin-bottom: 0.5rem;">
+                        <strong>${key}:</strong> ${value}
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error updating config:', error);
+            }
+        }
+
+        function filterJobs(state) {
+            currentFilter = state;
+            
+            // Update active button
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            updateJobs();
+        }
+
+        document.getElementById('enqueueForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const jobId = document.getElementById('jobId').value;
+            const command = document.getElementById('jobCommand').value;
+            const maxRetries = parseInt(document.getElementById('maxRetries').value) || 3;
+            
+            try {
+                const response = await fetch('/api/enqueue', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        id: jobId,
+                        command: command,
+                        max_retries: maxRetries
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('Job enqueued successfully!');
+                    document.getElementById('enqueueForm').reset();
+                    refreshAll();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                alert('Error enqueueing job: ' + error.message);
+            }
+        });
+
+        async function retryJob(jobId) {
+            if (!confirm(`Retry job "${jobId}" from DLQ?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/dlq/${jobId}/retry`, {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('Job reset and will be retried!');
+                    refreshAll();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                alert('Error retrying job: ' + error.message);
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            return date.toLocaleString();
+        }
+    </script>
+</body>
+</html>
+
