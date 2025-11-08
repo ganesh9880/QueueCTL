@@ -195,6 +195,16 @@ queuectl config set backoff_base 3
 ```
 
 Note: Both hyphen and underscore are supported (e.g., `max-retries` or `max_retries`).
+## 🖼️ Demo Output
+
+Here’s a preview of the QueueCTL system in action:
+
+### CLI Output Demo
+![CLI Demo](demo_01.jpg)
+
+### Web UI Dashboard Demo
+![Web UI Demo](demo_02.jpg)
+
 
 #### Web UI Dashboard
 
